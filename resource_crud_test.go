@@ -6,6 +6,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -124,10 +126,6 @@ func TestResource(t *testing.T) {
 
 //https://github.com/kubernetes/client-go/blob/master/examples/workqueue/main.go#L174
 //https://github.com/kubernetes/sample-controller/blob/master/controller.go#L87:6
-//https://yq.aliyun.com/articles/688485#
-//https://blog.csdn.net/weixin_42663840/article/details/81980022
-//https://blog.csdn.net/weixin_42663840/article/details/81530606
-//https://blog.csdn.net/weixin_42663840/article/details/81699303
 func TestInformer(t *testing.T) {
 	config, e := clientcmd.BuildConfigFromFlags("10.30.21.238:6443", "/home/tangxu/.kube/config")
 	if e != nil {
@@ -142,26 +140,32 @@ func TestInformer(t *testing.T) {
 	stopChan := make(chan struct{})
 	factory := informers.NewSharedInformerFactory(client, 30*time.Second)
 	podInformer := factory.Core().V1().Pods()
+	factory.Apps().V1().Deployments()
+	//添加eventHandler
 	podInformer.Informer().AddEventHandler(&EventHandler{})
-	//ret, e := podInformer.Lister().List(labels.Nothing())
+	//使用lister方式获取pod资源
+	ret1, e := podInformer.Lister().List(labels.Nothing())
+	fmt.Println(ret1, e)
 
-	//informer, e := factory.ForResource(schema.GroupVersionResource{
-	//	Group:    "extensions",
-	//	Version:  "v1beta1",
-	//	Resource: "Deployment",
-	//})
-	//if e != nil {
-	//	println(e.Error())
-	//}
-	//ret, e := informer.Lister().ByNamespace("kube-system").List(labels.Nothing())
-	//fmt.Println(ret,e)
+	//也可以通过此方式获取informer
+	informer, e := factory.ForResource(schema.GroupVersionResource{
+		Group:    "apps",
+		Version:  "v1",
+		Resource: "deployments",
+	})
+	if e != nil {
+		println(e.Error())
+	}
+	//具体某个资源的group,version,resource的获取如下:
+	fmt.Println(appsv1.SchemeGroupVersion.WithResource("deployments"))
 
-	//informer.Informer().AddEventHandler()
-	//factory.InformerFor(&corev1.Pod{}, func(inter kubernetes.Interface, duration time.Duration) cache.SharedIndexInformer {
-	//	return nil
-	//})
+	//获取列表
+	ret, e := informer.Lister().ByNamespace("kube-system").List(labels.Nothing())
+	fmt.Println(ret, e)
+
 	factory.Start(stopChan)
-	TestResource(t)
+	//TestResource(t)
+	time.Sleep(5 * time.Minute)
 
 	stopChan <- EventHandler{}
 
